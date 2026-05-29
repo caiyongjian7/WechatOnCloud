@@ -56,7 +56,7 @@ export default function Dashboard() {
   return (
     <div className="page">
       <header className="topbar">
-        <span className="topbar-title">云微信</span>
+        <span className="topbar-title">云微</span>
         <button className="btn-text" onClick={() => logout()}>
           退出
         </button>

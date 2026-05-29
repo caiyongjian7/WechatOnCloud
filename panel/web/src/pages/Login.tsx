@@ -28,8 +28,8 @@ export default function Login() {
     <div className="center-screen">
       <form className="card login-card" onSubmit={submit}>
         <div className="brand">
-          <div className="brand-logo">微</div>
-          <h1>云微信</h1>
+          <div className="brand-logo"><img src="/favicon.svg" alt="" /></div>
+          <h1>云微</h1>
           <p className="muted">登录以访问 NAS 上的微信</p>
         </div>
         <input

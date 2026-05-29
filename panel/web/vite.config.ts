@@ -12,8 +12,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icon-180.png'],
       manifest: {
-        name: '云微信',
-        short_name: '云微信',
+        name: '云微',
+        short_name: '云微',
         description: '在浏览器访问 NAS 上的微信',
         lang: 'zh-CN',
         theme_color: '#07C160',
