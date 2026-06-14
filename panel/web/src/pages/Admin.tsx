@@ -106,32 +106,27 @@ function DiagnosticsSection() {
       <div className="section-row" style={{ marginTop: 22 }}>
         <span className="section-title">诊断与日志</span>
       </div>
-      <div className="inst-grid">
-        <div className="inst-card">
-          <div className="inst-head">
-            <span className="inst-name">导出诊断包</span>
+      <div className="settings-block">
+        <p className="s-desc">打包系统/Docker 信息 + 面板全局日志 + 各实例容器状态与日志 + 容器清单，用于排查部署、创建卡死、黑屏不可用、升级失败等问题。</p>
+        <div className="s-field">
+          <span className="field-label">时间范围</span>
+          <div className="chip-row">
+            {DIAG_RANGE_OPTIONS.map((r) => (
+              <button key={r.key} className={'chip chip-toggle' + (range === r.key ? ' on' : '')} onClick={() => setRange(r.key)}>
+                {r.label}
+              </button>
+            ))}
           </div>
-          <div className="inst-sub">打包系统/Docker 信息 + 面板全局日志 + 各实例容器状态与日志 + 容器清单，用于排查部署、创建卡死、黑屏不可用、升级失败等问题。</div>
-          <div className="diag-range">
-            <span className="field-label">时间范围</span>
-            <div className="chip-row">
-              {DIAG_RANGE_OPTIONS.map((r) => (
-                <button key={r.key} className={'chip-toggle' + (range === r.key ? ' on' : '')} onClick={() => setRange(r.key)}>
-                  {r.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="inst-actions">
-            <button className="btn btn-primary" onClick={exportBundle}>
-              导出诊断包 (.tar.gz)
-            </button>
-            <a className="btn" href={api.panelLogUrl(range)} target="_blank" rel="noreferrer">
-              查看面板日志
-            </a>
-          </div>
-          <div className="muted small ver-checked">导出当前选定时间范围内的日志。超过一年的日志会自动清理；诊断包不含密码/密钥等敏感信息。</div>
         </div>
+        <div className="settings-actions">
+          <button className="btn btn-primary s-btn" onClick={exportBundle}>
+            导出诊断包
+          </button>
+          <a className="btn-text" href={api.panelLogUrl(range)} target="_blank" rel="noreferrer">
+            查看面板日志 ›
+          </a>
+        </div>
+        <p className="s-foot">导出当前选定范围内的日志（.tar.gz）。超过一年的日志自动清理；诊断包不含密码 / 密钥等敏感信息。</p>
       </div>
     </>
   );
@@ -173,54 +168,52 @@ function AboutSection({ isAdmin }: { isAdmin: boolean }) {
       <div className="section-row" style={{ marginTop: 22 }}>
         <span className="section-title">关于</span>
       </div>
-      <div className="inst-grid">
-        <div className="inst-card">
-          <div className="inst-head">
-            <span className="inst-name">云微 · WechatOnCloud</span>
-            {info?.hasUpdate ? <span className="tag tag-warn">有新版</span> : info && !isRelease ? <span className="tag">开发版</span> : null}
-          </div>
-          <div className="inst-sub">
-            当前版本 <b>{info?.current ?? '…'}</b>
-            {info?.hasUpdate && info.latest && (
-              <>
-                {' · '}最新 <b>{info.latest}</b>
-              </>
-            )}
-            {isRelease && info && !info.hasUpdate && info.latest && !info.error && <>{' · '}已是最新</>}
-            {!isRelease && info?.latest && !info.error && (
-              <>
-                {' · '}最新发布 <b>{info.latest}</b>
-              </>
-            )}
-          </div>
-          {info?.hasUpdate && (
-            <div className="ver-hint">
-              在宿主执行 <code>docker compose pull &amp;&amp; docker compose up -d</code> 升级面板；各实例镜像可在「管理 → 升级」单独更新。
-            </div>
-          )}
-          <div className="inst-actions">
-            {isAdmin && (
-              <button className="btn" disabled={checking} onClick={check}>
-                {checking ? '检查中…' : '检查更新'}
-              </button>
-            )}
-            <a className="btn" href={RELEASES_URL} target="_blank" rel="noreferrer">
-              发布日志
-            </a>
-            {info?.hasUpdate && (
-              <a className="btn btn-primary" href={RELEASES_URL + '/latest'} target="_blank" rel="noreferrer">
-                查看新版
-              </a>
-            )}
-          </div>
-          {info && (
-            <div className="muted small ver-checked">
-              {info.checkedAt ? `上次检查 ${fmtDate(info.checkedAt)}` : '尚未检查'}
-              {info.source && ` · 来源 ${info.source}`}
-              {info.error && ` · ${info.error}`}
-            </div>
-          )}
+      <div className="settings-block">
+        <div className="s-title-row">
+          <span className="s-app">云微 · WechatOnCloud</span>
+          {info?.hasUpdate ? <span className="tag tag-warn">有新版</span> : info && !isRelease ? <span className="tag">开发版</span> : null}
         </div>
+        <p className="s-line">
+          当前版本 <b>{info?.current ?? '…'}</b>
+          {info?.hasUpdate && info.latest && (
+            <>
+              {' · '}最新 <b>{info.latest}</b>
+            </>
+          )}
+          {isRelease && info && !info.hasUpdate && info.latest && !info.error && <>{' · '}已是最新</>}
+          {!isRelease && info?.latest && !info.error && (
+            <>
+              {' · '}最新发布 <b>{info.latest}</b>
+            </>
+          )}
+        </p>
+        {info?.hasUpdate && (
+          <div className="ver-hint">
+            在宿主执行 <code>docker compose pull &amp;&amp; docker compose up -d</code> 升级面板；各实例镜像可在「管理 → 升级」单独更新。
+          </div>
+        )}
+        <div className="settings-actions">
+          {info?.hasUpdate && (
+            <a className="btn btn-primary s-btn" href={RELEASES_URL + '/latest'} target="_blank" rel="noreferrer">
+              查看新版
+            </a>
+          )}
+          {isAdmin && (
+            <button className="btn-text" disabled={checking} onClick={check}>
+              {checking ? '检查中…' : '检查更新'}
+            </button>
+          )}
+          <a className="btn-text" href={RELEASES_URL} target="_blank" rel="noreferrer">
+            发布日志 ›
+          </a>
+        </div>
+        {info && (
+          <p className="s-foot">
+            {info.checkedAt ? `上次检查 ${fmtDate(info.checkedAt)}` : '尚未检查'}
+            {info.source && ` · 来源 ${info.source}`}
+            {info.error && ` · ${info.error}`}
+          </p>
+        )}
       </div>
     </>
   );

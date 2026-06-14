@@ -1047,13 +1047,67 @@ button {
   gap: 6px;
   margin-top: 4px;
 }
-/* 诊断包时间范围选择行 */
-.diag-range {
-  margin-top: 12px;
+/* 扁平设置区块（诊断与日志 / 关于）：无卡片，直接排在分区标题下，避免单卡片的厚重感 */
+.settings-block {
+  padding: 2px 2px 4px;
 }
-.diag-range .field-label {
+.settings-block .s-desc {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--muted);
+  max-width: 660px;
+}
+.s-field {
+  margin-top: 14px;
+}
+.s-field .field-label {
   display: block;
   margin: 0 2px 8px;
+}
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-top: 16px;
+}
+/* 实心主按钮：固定内边距 + 不换行（之前作为 flex 项被压窄导致按钮内文字断行） */
+.settings-actions .s-btn {
+  height: 42px;
+  padding: 0 22px;
+  flex: none;
+  white-space: nowrap;
+}
+.settings-actions .btn-text {
+  white-space: nowrap;
+}
+.s-foot {
+  margin: 14px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+  max-width: 660px;
+}
+.s-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.s-app {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.s-line {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+.s-line b {
+  color: var(--text);
+  font-weight: 600;
 }
 .chip-row-pick {
   display: flex;
