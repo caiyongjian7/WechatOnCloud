@@ -15,6 +15,8 @@ on:
     types: [published]
   issues:
     types: [opened]
+  issue_comment:
+    types: [created]
   workflow_dispatch: {}
 
 permissions:
@@ -43,4 +45,11 @@ jobs:
           I_URL: ${{ github.event.issue.html_url }}
           I_USER: ${{ github.event.issue.user.login }}
           I_BODY: ${{ github.event.issue.body }}
+          # issue_comment 事件：issue 下的新回复（PR 评论也走此事件，脚本里据 C_PR 跳过）
+          C_NUM: ${{ github.event.issue.number }}
+          C_TITLE: ${{ github.event.issue.title }}
+          C_URL: ${{ github.event.comment.html_url }}
+          C_USER: ${{ github.event.comment.user.login }}
+          C_BODY: ${{ github.event.comment.body }}
+          C_PR: ${{ github.event.issue.pull_request.html_url }}
         run: node .github/scripts/tg-notify.mjs
