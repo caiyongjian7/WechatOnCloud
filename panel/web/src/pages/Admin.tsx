@@ -1433,8 +1433,8 @@ function CreateInstance({ subs, onClose, onDone }: { subs: PanelUser[]; onClose:
           ))}
         </div>
         <input className="input" placeholder="实例名称（留空自动命名）" value={name} onChange={(e) => setName(e.target.value)} />
-        {appType === 'telegram' && (
-          <div className="muted small">Telegram 官方仅提供 x86_64 桌面版；arm64（树莓派 / 部分 NAS）暂不支持。</div>
+        {appType === 'chromium' && (
+          <div className="muted small">Chromium 浏览器随镜像就绪，创建后直接「进入实例」即可（无需下载安装）。</div>
         )}
         <div className="field-label">允许访问的子账号（管理员默认可访问全部）</div>
         <ChipMultiSelect
