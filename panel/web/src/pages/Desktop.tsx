@@ -630,10 +630,11 @@ export default function InstanceView({ onOpenMenu }: { onOpenMenu: () => void })
     setImeSending(true);
     try {
       await api.typeInInstance(id, t);
+      // 打完直接补一个回车把消息发出去（issue #81），焦点【始终留在本输入条】。
+      // 切勿在转发模式把焦点切回虚拟机——那等于开了"无感输入"，用户接着打的拼音会以原始 keysym 直灌微信
+      // 输入框（出现 "nniih'h你好啊" 这种串码）。下一条仍在本条用本机输入法安全地打。
+      await api.keyInInstance(id, 'Return');
       setImeText('');
-      // 发送后把键盘焦点交回虚拟机（issue #81）：字已落进微信输入框，焦点回到桌面后用户再按一次回车
-      // 即可在微信里发出去，省掉用鼠标点「发送」。延迟一拍，等 React 清空输入框、避免被本框抢回焦点。
-      setTimeout(() => focusFrame(), 60);
     } catch (e: any) {
       toast(e?.message || '发送失败：请确认实例已「升级实例」（镜像含 xclip/xdotool）', 'error');
     } finally {
@@ -1000,7 +1001,7 @@ export default function InstanceView({ onOpenMenu }: { onOpenMenu: () => void })
                     sendImeText();
                   }
                 }}
-                placeholder="中文输入这里 → 回车送进应用（先点好应用的输入框），焦点会自动回到桌面，再按一次回车即发送。Shift+回车换行。"
+                placeholder="中文输入这里 → 回车直接发送到应用（先点好应用的输入框）。Shift+回车换行。"
                 rows={1}
               />
               <button
