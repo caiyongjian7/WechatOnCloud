@@ -73,7 +73,7 @@ import {
   volBackupStream,
   volRestoreArchive,
 } from './docker.js';
-import { createSession, getSession, destroySession, destroyUserSessions } from './sessions.js';
+import { createSession, getSession, destroySession, destroyUserSessions, SESSION_TTL_MS } from './sessions.js';
 import { parseHost, parseAllowedHosts, isRequestHostAllowed } from './host-guard.js';
 import { CURRENT_VERSION, versionInfo, ensureChecked, checkForUpdate, startUpdateChecker } from './version.js';
 import { triggerSelfUpdate } from './self-update.js';
@@ -160,7 +160,7 @@ app.post('/api/auth/login', async (req, reply) => {
     httpOnly: true,
     sameSite: 'lax',
     path: '/',
-    maxAge: 60 * 60 * 12,
+    maxAge: Math.floor(SESSION_TTL_MS / 1000), // 与服务端会话时长一致（WOC_SESSION_DAYS，默认 30 天）
   });
   return { user: publicUser(u) };
 });

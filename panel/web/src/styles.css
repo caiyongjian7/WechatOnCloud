@@ -823,7 +823,7 @@ button {
   padding: 10px 12px;
   border-radius: 14px;
   border: none;
-  background: var(--mf-trough, #edeef1);
+  background: var(--trough, #edeef1);
   color: var(--text, #1a1d24);
   font-size: 14px;
   line-height: 1.5;
@@ -839,7 +839,7 @@ button {
   margin-top: 12px;
   padding: 10px 14px;
   border-radius: 14px;
-  background: var(--mf-trough, #edeef1);
+  background: var(--trough, #edeef1);
   box-shadow: inset 0 1px 3px rgba(51, 66, 102, 0.12);
   display: flex;
   flex-direction: column;

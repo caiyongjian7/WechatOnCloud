@@ -307,6 +307,35 @@ export default function InstanceView({ onOpenMenu }: { onOpenMenu: () => void })
     };
   }, [showVnc]);
 
+  // 粘贴图片 → 上传到桌面（issue #91）：截图不能经 VNC 剪贴板送进容器（RFB 剪贴板仅文本），故把粘贴的
+  // 图片存成桌面文件，用户在应用里「+/文件」取用即可。焦点在输入框/文本域时不拦截（让原生粘贴文字生效）。
+  useEffect(() => {
+    if (!showVnc) return;
+    const onPaste = (e: ClipboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const imgs: File[] = [];
+      for (const it of Array.from(items)) {
+        if (it.kind === 'file' && it.type.startsWith('image/')) {
+          const f = it.getAsFile();
+          if (f) {
+            const ext = (f.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+            imgs.push(new File([f], `粘贴图片-${Date.now()}.${ext}`, { type: f.type }));
+          }
+        }
+      }
+      if (imgs.length) {
+        e.preventDefault();
+        uploadFiles(imgs); // 内部会 toast 上传结果
+      }
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showVnc]);
+
   // 控制权（交互驱动的心跳软锁）：每 3s 只读轮询当前操作者；超 TTL 自动释放。
   useEffect(() => {
     if (!showVnc || !id) {

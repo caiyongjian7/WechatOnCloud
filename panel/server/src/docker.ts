@@ -504,13 +504,40 @@ export async function wechatStatus(inst: Instance): Promise<WechatStatus> {
 
 // 拉取微信镜像（首次部署/更新镜像用）。返回拉取日志的最后状态。
 export async function pullImage(onProgress?: (line: any) => void): Promise<void> {
+  // 无进度超时：NAS 直连 docker.io 常卡死（拉取流僵住、永不结束），旧版会让"创建实例"请求无限 hang，
+  // 前端一直转圈、还删不掉（issue #99）。这里只要 N 分钟内没有任何进度就中止拉取，让创建带清晰错误快速失败、
+  // 用户可重试/删除。默认 5 分钟，WOC_PULL_STALL_MIN 可调。
+  const STALL_MS = 1000 * 60 * Math.max(2, Number(process.env.WOC_PULL_STALL_MIN) || 5);
   return await new Promise((resolve, reject) => {
     docker.pull(WECHAT_IMAGE, (err: any, stream: NodeJS.ReadableStream) => {
       if (err) return reject(err);
+      let done = false;
+      let timer: ReturnType<typeof setTimeout>;
+      const finish = (e: any) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        e ? reject(e) : resolve();
+      };
+      const arm = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          try {
+            (stream as any).destroy?.();
+          } catch {
+            /* ignore */
+          }
+          finish(new Error(`拉取镜像 ${Math.round(STALL_MS / 60000)} 分钟无进度，判定网络卡死并中止（建议配置国内镜像源或预拉取，详见 README）`));
+        }, STALL_MS);
+      };
+      arm();
       docker.modem.followProgress(
         stream,
-        (e: any) => (e ? reject(e) : resolve()),
-        (ev: any) => onProgress?.(ev),
+        (e: any) => finish(e),
+        (ev: any) => {
+          arm(); // 每有进度就重置超时
+          onProgress?.(ev);
+        },
       );
     });
   });
