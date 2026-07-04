@@ -47,17 +47,27 @@ if [ "$APP_TYPE" = "custom" ] && [ -z "${APP_LAUNCH:-}" ]; then
     exit 0
 fi
 
-# 1) 应用壁纸（若用户设置了自定义背景图）
+# 1) 应用壁纸（若用户设置了自定义背景图）。
+# 关键：Xvnc 启动时是默认分辨率，浏览器连上后 KasmVNC 会 resize-remote 到浏览器尺寸。若只在启动时设一次，
+# 屏幕一变大，X 会把当时设的小尺寸 root pixmap【平铺】填满新屏（表现为壁纸被 2×2 平铺，见 issue 反馈）。
+# 故用看守：每 2s 检查分辨率，一变就用 --zoom（填充裁切、保持比例）重设壁纸。也顺带跟随面板对壁纸文件的改动。
 WALLPAPER_FILE="/config/.wallpaper"
 WALLPAPER_DIR="/config/backgrounds"
-if [ -f "$WALLPAPER_FILE" ]; then
-    wp=$(cat "$WALLPAPER_FILE")
-    if [ -n "$wp" ] && [ -f "$WALLPAPER_DIR/$wp" ]; then
-        export DISPLAY="${DISPLAY:-:1}"
-        xwallpaper --zoom "$WALLPAPER_DIR/$wp" 2>/dev/null && \
-            echo "[autostart] 壁纸已应用: $wp"
-    fi
-fi
+(
+    export DISPLAY="${DISPLAY:-:1}"
+    last=""
+    while sleep 2; do
+        [ -f "$WALLPAPER_FILE" ] || { last=""; continue; }
+        wp=$(cat "$WALLPAPER_FILE" 2>/dev/null) || continue
+        [ -n "$wp" ] && [ -f "$WALLPAPER_DIR/$wp" ] || { last=""; continue; }
+        # 用「分辨率 + 壁纸名」做签名：分辨率变(resize)或换了壁纸都会重设
+        sig="${wp}@$(xrandr 2>/dev/null | grep -o '[0-9]\+x[0-9]\+' | head -1)"
+        if [ "$sig" != "$last" ]; then
+            last="$sig"
+            xwallpaper --zoom "$WALLPAPER_DIR/$wp" 2>/dev/null && echo "[autostart] 壁纸已应用/重设: $sig"
+        fi
+    done
+) &
 
 # 2) 应用自定义字体（若用户设置了）
 # 从持久卷恢复系统级 fontconfig 配置（跨越容器重建）
