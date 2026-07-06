@@ -356,7 +356,7 @@ export async function regenInstanceMachineId(inst: Instance): Promise<void> {
   // 删除持久化文件；重启时钩子检测到缺失 → 生成新的唯一 machine-id 并写回卷
   await execCapture(inst, ['sh', '-c', 'rm -f /config/.woc-machine-id']);
   await stopInstance(inst);
-  await runInstance(inst);
+  await runInstance(inst, { keepImage: true }); // 重置身份=恢复类操作，幂等：不隐式换镜像（R10）
 }
 
 // 停止实例容器（保留容器与数据卷，可再启动）。
