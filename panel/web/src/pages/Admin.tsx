@@ -270,6 +270,7 @@ export default function Admin({ onOpenMenu, onChangePassword }: { onOpenMenu: ()
   const [acting, setActing] = useState<Record<string, string>>({}); // 实例 id → 进行中的动作文案（启动中/升级中…）
   const [upg, setUpg] = useState<{ outdatedCount: number; outdatedIds: string[] } | null>(null); // 镜像落后的实例
   const [upgradingAll, setUpgradingAll] = useState(false);
+  const [upgProgress, setUpgProgress] = useState(''); // 一键升级进度文案（"2/5 · 升级「xxx」…"）
   // 未使用的旧数据卷（来自之前删实例时未勾选"彻底清除"）：允许复用以继承聊天记录，或显式删除。
   const [orphanVols, setOrphanVols] = useState<{ name: string; createdAt?: string; sizeBytes?: number }[]>([]);
   // 残留 woc-wx-* 容器（runInstance 启动失败遗留的 Created 容器等）：占着卷名让删卷报 409。
@@ -412,25 +413,51 @@ export default function Admin({ onOpenMenu, onChangePassword }: { onOpenMenu: ()
     }
   };
 
-  // 一键升级全部"镜像落后"的实例（逐个拉新镜像重建，可能几分钟）。
+  // 一键升级全部"镜像落后"的实例。后端异步执行（拉镜像+逐个重建可能数分钟），
+  // 这里发起后轮询 upgrade-status 里的进度，避免单个请求悬死（旧版同步等待被反馈"一直卡死"）。
   const upgradeAll = async () => {
     const n = upg?.outdatedCount || 0;
     const ok = await confirm({
       title: `升级全部 ${n} 个可升级实例？`,
-      body: '将逐个拉取最新实例镜像并重建（数据保留），每个约十几秒到几分钟；期间这些实例会短暂重连。',
+      body: '后台逐个拉取最新实例镜像并重建（数据保留）；期间这些实例会短暂重连，可离开本页。',
       confirmText: '全部升级',
     });
     if (!ok) return;
     setUpgradingAll(true);
-    toast('正在逐个升级实例，请勿离开…', 'info');
     try {
       const r = await api.upgradeAllInstances();
-      toast(`升级完成：成功 ${r.upgraded}${r.failed ? `、失败 ${r.failed}` : ''}`, r.failed ? 'error' : 'ok');
+      if (!r.started) {
+        toast('所有实例已是最新镜像', 'ok');
+        setUpgradingAll(false);
+        await load();
+        return;
+      }
+      toast(`已开始升级 ${r.total} 个实例（后台进行）…`, 'info');
+      // 轮询进度直到完成（3s 一次；异常网络下最多轮 30 分钟兜底退出）
+      for (let i = 0; i < 600; i++) {
+        await new Promise((res) => setTimeout(res, 3000));
+        try {
+          const s = await api.upgradeStatus();
+          const p = s.upgradeAll;
+          if (p.running) {
+            setUpgProgress(`${p.done}/${p.total}${p.phase ? ` · ${p.phase}` : ''}`);
+            continue;
+          }
+          toast(
+            `升级完成：成功 ${p.total - p.failed}${p.failed ? `、失败 ${p.failed}（看面板日志）` : ''}`,
+            p.failed ? 'error' : 'ok',
+          );
+          break;
+        } catch {
+          /* 面板短暂不可达（不影响后台任务），继续轮询 */
+        }
+      }
       await load();
     } catch (e: any) {
       toast(e.message || '升级失败', 'error');
     } finally {
       setUpgradingAll(false);
+      setUpgProgress('');
     }
   };
 
@@ -485,7 +512,7 @@ export default function Admin({ onOpenMenu, onChangePassword }: { onOpenMenu: ()
                   <span className="muted small">（更新面板不会自动升级实例，二者是不同镜像）</span>
                 </span>
                 <button className="btn btn-primary s-btn" disabled={upgradingAll} onClick={upgradeAll}>
-                  {upgradingAll ? '升级中…请稍候' : '一键升级全部实例'}
+                  {upgradingAll ? `升级中 ${upgProgress || '…'}` : '一键升级全部实例'}
                 </button>
               </div>
             )}

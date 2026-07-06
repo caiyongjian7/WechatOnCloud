@@ -45,6 +45,8 @@ import {
   upgradeInstance,
   latestInstanceImageId,
   instanceOutdated,
+  pullImage,
+  pruneDanglingImages,
   removeInstance as removeInstanceContainer,
   instanceRuntime,
   triggerWechat,
@@ -663,30 +665,55 @@ app.get('/api/admin/instances/upgrade-status', async (req, reply) => {
     list.map(async (inst) => ({ id: inst.id, name: inst.name, outdated: await instanceOutdated(inst, latestId) })),
   );
   const outdated = results.filter((r) => r.outdated);
-  return { known: !!latestId, outdatedCount: outdated.length, outdatedIds: outdated.map((r) => r.id), instances: results };
+  return {
+    known: !!latestId,
+    outdatedCount: outdated.length,
+    outdatedIds: outdated.map((r) => r.id),
+    instances: results,
+    upgradeAll: upgradeAllState, // 一键升级进行中的进度（running=false 表示空闲/已完成）
+  };
 });
 
-// 一键升级全部"镜像落后"的实例（顺序执行，逐个 best-effort；个别失败不影响其余）。
+// 一键升级全部"镜像落后"的实例。
+// 异步化：拉镜像 + 逐个重建可能耗时数分钟到更久（受限网络下拉取要等到停滞超时），同步等待会让
+// 前端请求悬死、代理超时——用户反馈"一键升级一直卡死"。改为：立即返回，后台顺序执行，
+// 前端轮询 upgrade-status 里的 upgradeAll 进度。镜像只拉一次（不再每实例各拉一次）。
+let upgradeAllState = { running: false, total: 0, done: 0, failed: 0, phase: '' };
 app.post('/api/admin/instances/upgrade-all', async (req, reply) => {
   if (!requireAdmin(req, reply)) return;
+  if (upgradeAllState.running) return reply.code(409).send({ error: '一键升级正在进行中，请等待完成' });
   const latestId = await latestInstanceImageId();
   if (!latestId) return reply.code(409).send({ error: '本地尚无实例镜像，无法判断是否需要升级（请先联网拉取）' });
   const list = listInstances();
-  let upgraded = 0;
-  let failed = 0;
-  for (const inst of list) {
-    if (!(await instanceOutdated(inst, latestId))) continue;
+  const outdated: typeof list = [];
+  for (const inst of list) if (await instanceOutdated(inst, latestId)) outdated.push(inst);
+  if (!outdated.length) return { ok: true, started: false, upgraded: 0, failed: 0 };
+
+  upgradeAllState = { running: true, total: outdated.length, done: 0, failed: 0, phase: '拉取最新镜像…' };
+  void (async () => {
+    // 统一拉取一次（失败不阻断：用本地已有镜像重建）
     try {
-      appendPanelLog('INFO', `一键升级实例「${inst.name}」(id=${inst.id})…`);
-      await upgradeInstance(inst);
-      upgraded++;
+      await pullImage();
     } catch (e: any) {
-      failed++;
-      appendPanelLog('ERROR', `一键升级实例「${inst.name}」(id=${inst.id}) 失败：${e?.message || e}`);
+      appendPanelLog('WARN', `一键升级：拉取镜像失败（${e?.message || e}），改用本地镜像重建`);
     }
-  }
-  appendPanelLog('INFO', `一键升级全部实例完成：成功 ${upgraded}、失败 ${failed}`);
-  return { ok: true, upgraded, failed };
+    for (const inst of outdated) {
+      upgradeAllState.phase = `升级「${inst.name}」…`;
+      try {
+        appendPanelLog('INFO', `一键升级实例「${inst.name}」(id=${inst.id})…`);
+        await upgradeInstance(inst, { skipPull: true });
+      } catch (e: any) {
+        upgradeAllState.failed++;
+        appendPanelLog('ERROR', `一键升级实例「${inst.name}」(id=${inst.id}) 失败：${e?.message || e}`);
+      }
+      upgradeAllState.done++;
+    }
+    appendPanelLog('INFO', `一键升级全部实例完成：成功 ${upgradeAllState.done - upgradeAllState.failed}、失败 ${upgradeAllState.failed}`);
+    // 升级后旧镜像变悬空（<none>），顺手清理防磁盘堆积
+    await pruneDanglingImages();
+    upgradeAllState = { ...upgradeAllState, running: false, phase: '' };
+  })();
+  return { ok: true, started: true, total: outdated.length };
 });
 
 // 实例侧：设置该实例可被哪些账户访问

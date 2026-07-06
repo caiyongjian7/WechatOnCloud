@@ -202,13 +202,17 @@ export const api = {
   instanceStop: (id: string) => req(`/api/admin/instances/${id}/stop`, { method: 'POST' }),
   instanceRestart: (id: string) => req(`/api/admin/instances/${id}/restart`, { method: 'POST' }),
   instanceUpgrade: (id: string) => req(`/api/admin/instances/${id}/upgrade`, { method: 'POST' }),
-  // 实例镜像升级状态（哪些实例落后于最新镜像）+ 一键升级全部落后实例。
+  // 实例镜像升级状态（哪些实例落后于最新镜像 + 一键升级进行中的进度）+ 发起一键升级（异步，立即返回，轮询进度）。
   upgradeStatus: () =>
-    req<{ known: boolean; outdatedCount: number; outdatedIds: string[]; instances: { id: string; name: string; outdated: boolean }[] }>(
-      '/api/admin/instances/upgrade-status',
-    ),
+    req<{
+      known: boolean;
+      outdatedCount: number;
+      outdatedIds: string[];
+      instances: { id: string; name: string; outdated: boolean }[];
+      upgradeAll: { running: boolean; total: number; done: number; failed: number; phase: string };
+    }>('/api/admin/instances/upgrade-status'),
   upgradeAllInstances: () =>
-    req<{ ok: boolean; upgraded: number; failed: number }>('/api/admin/instances/upgrade-all', { method: 'POST' }),
+    req<{ ok: boolean; started: boolean; total?: number }>('/api/admin/instances/upgrade-all', { method: 'POST' }),
   instanceLogsUrl: (id: string) => `/api/admin/instances/${id}/logs`,
   // 全局日志 / 诊断包（范围 24h/7d/30d/1y）
   diagnosticsUrl: (range: string) => `/api/admin/diagnostics?range=${encodeURIComponent(range)}`,

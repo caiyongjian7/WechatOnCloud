@@ -223,6 +223,9 @@ export async function runInstance(inst: Instance): Promise<void> {
     SecurityOpt: ['seccomp=unconfined'],
     ShmSize: SHM_SIZE,
     RestartPolicy: { Name: 'unless-stopped' },
+    // 日志硬上限：docker 默认 json-file 无大小限制，应用崩溃循环（每 2s 刷错误）会把宿主磁盘
+    // 无限吃掉（群晖用户反馈"一下子 1TB 没了"的元凶之一）。每实例封顶 20MB×2。
+    LogConfig: { Type: 'json-file', Config: { 'max-size': '20m', 'max-file': '2' } },
   };
   if (INSTANCE_MEM > 0) {
     hostConfig.Memory = INSTANCE_MEM;
@@ -293,13 +296,29 @@ export async function ensureRunning(inst: Instance): Promise<void> {
 
 // 升级实例：拉取最新微信镜像后重建容器（保留数据卷 → 登录态不丢）。
 // 拉取失败（本地自构建 / 离线 / 仓库不可达）则用本地现有镜像重建，不阻断。
-export async function upgradeInstance(inst: Instance): Promise<void> {
-  try {
-    await pullImage();
-  } catch (e: any) {
-    console.warn('[docker] 升级时拉取镜像失败，改用本地镜像重建:', e?.message || e);
+// skipPull：批量升级时由调用方先统一拉取一次，避免 N 个实例拉 N 次（受限网络下每次
+// 都要等到拉取停滞超时，表现为"一键升级卡死"）。
+export async function upgradeInstance(inst: Instance, opts?: { skipPull?: boolean }): Promise<void> {
+  if (!opts?.skipPull) {
+    try {
+      await pullImage();
+    } catch (e: any) {
+      console.warn('[docker] 升级时拉取镜像失败，改用本地镜像重建:', e?.message || e);
+    }
   }
   await runInstance(inst);
+}
+
+// 清理悬空（dangling）镜像：升级后旧实例镜像失去 tag 变成 <none>，长期堆积吃磁盘
+// （每层 1-2GB，多次升级后可观）。只删无 tag 且无容器引用的镜像，安全。best-effort。
+export async function pruneDanglingImages(): Promise<void> {
+  try {
+    const res: any = await docker.pruneImages({ filters: { dangling: ['true'] } as any });
+    const freed = Number(res?.SpaceReclaimed || 0);
+    if (freed > 0) appendPanelLog('INFO', `已清理悬空镜像，释放 ${(freed / 1024 / 1024 / 1024).toFixed(2)} GB`);
+  } catch (e: any) {
+    console.warn('[docker] 清理悬空镜像失败（忽略）:', e?.message || e);
+  }
 }
 
 // 重置实例的设备 machine-id：删掉持久化的 .woc-machine-id 后重启，由 00-woc-identity 钩子重新生成
@@ -1214,12 +1233,15 @@ export async function applyFont(inst: Instance, fontFile: string): Promise<void>
 
 async function applyXsettingsFont(inst: Instance, family: string): Promise<void> {
   const conf = '/config/.xsettingsd';
+  // ⚠️ XSETTINGS 规范里 Xft/DPI 单位是「DPI × 1024」：96 DPI 必须写 98304。误写 96 会让所有
+  // Chromium 内核应用（系统 Chromium / 微信内嵌 CEF）把缩放因子算成≈0 → 变换矩阵不可逆 →
+  // GPU 进程连崩 → 窗口秒关/黑屏（v1.2.9~v1.3.1 的总根因，issue #111）。
   const lines = [
     'Xft/Antialias 1',
     'Xft/Hinting 1',
     'Xft/HintStyle "hintslight"',
     'Xft/RGBA "rgb"',
-    'Xft/DPI 96',
+    'Xft/DPI 98304',
     `Gtk/FontName "${family} 10"`,
   ];
   await execCapture(inst, ['sh', '-c', `printf '%s\\n' ${lines.map(l => `'${l}'`).join(' ')} > ${conf}`]);
