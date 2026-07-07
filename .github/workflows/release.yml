@@ -47,7 +47,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Resolve build version
+      - name: Resolve build version + lowercase owner
         id: ver
         run: |
           if [ "${{ github.ref_type }}" = "tag" ]; then
@@ -55,6 +55,8 @@ jobs:
           else
             echo "version=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
           fi
+          # docker 镜像引用必须小写；github.repository_owner 可能含大写（Gloridust），手动构造 ref 前先转小写
+          echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
       # ── 产物门禁：仅在 wechat + amd64（原生 x86，可 docker run）上跑冒烟探针 ──
       # 「验证的东西和发布的东西必须是同一个 artifact」；DPI/CEF 类问题与架构无关，amd64 探针即可覆盖。
@@ -111,7 +113,7 @@ jobs:
           build-args: ${{ matrix.name == 'panel' && format('WOC_VERSION={0}', steps.ver.outputs.version) || '' }}
           cache-from: type=gha,scope=${{ matrix.name }}-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}-${{ matrix.arch }}
-          outputs: type=image,name=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ steps.ver.outputs.owner }}/${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest
         run: |
@@ -164,12 +166,16 @@ jobs:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Lowercase owner
+        id: vars
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
       - name: Docker metadata (tags + labels)
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
+            ${{ env.REGISTRY }}/${{ steps.vars.outputs.owner }}/${{ matrix.image }}
             ${{ vars.DOCKERHUB_USERNAME != '' && format('docker.io/{0}/{1}', vars.DOCKERHUB_USERNAME, matrix.image) || '' }}
           tags: |
             type=semver,pattern={{version}}
@@ -186,10 +192,10 @@ jobs:
           set -eux
           tags=$(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON")
           srcs=""
-          for f in *; do srcs="$srcs ${REGISTRY}/${{ github.repository_owner }}/${{ matrix.image }}@sha256:$f"; done
+          for f in *; do srcs="$srcs ${REGISTRY}/${{ steps.vars.outputs.owner }}/${{ matrix.image }}@sha256:$f"; done
           docker buildx imagetools create $tags $srcs
 
       - name: Verify multi-arch manifest
         run: |
           set -eux
-          docker buildx imagetools inspect "${REGISTRY}/${{ github.repository_owner }}/${{ matrix.image }}:${{ steps.meta.outputs.version }}"
+          docker buildx imagetools inspect "${REGISTRY}/${{ steps.vars.outputs.owner }}/${{ matrix.image }}:${{ steps.meta.outputs.version }}"
