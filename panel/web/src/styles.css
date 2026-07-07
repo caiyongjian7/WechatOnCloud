@@ -2603,3 +2603,36 @@ button {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ========================================================================
+ * 无障碍 · Accessibility（设计系统基线，见 doc/dev/design.md）
+ * ==================================================================== */
+
+/* 键盘焦点环：牛奶布艺无边框，鼠标态靠明度区分，但键盘用户需要明确焦点提示。
+ * :focus-visible 只在键盘导航（Tab）时出现，鼠标点击不触发，不打扰日常使用。 */
+:focus-visible {
+  outline: 2px solid rgba(var(--green-rgb) / 0.85);
+  outline-offset: 2px;
+}
+/* 输入框已有绿色内环（.input:focus），不再叠加外环 */
+.input:focus-visible {
+  outline: none;
+}
+
+/* 动效降级：尊重系统「减弱动态效果」。去掉装饰性过渡/位移，
+ * 但保留加载与进度这类【必要的状态反馈】的循环动画（否则会像卡死）。 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+  .spinner,
+  .wx-progress-bar.indeterminate {
+    animation-duration: 0.8s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
