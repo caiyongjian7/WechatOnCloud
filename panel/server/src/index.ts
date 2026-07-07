@@ -48,6 +48,7 @@ import {
   pullImage,
   pruneDanglingImages,
   remoteInstanceImageNewer,
+  resolveInstanceImage,
   removeInstance as removeInstanceContainer,
   instanceRuntime,
   instanceImageVersion,
@@ -1440,6 +1441,9 @@ app.server.on('upgrade', (req: IncomingMessage, socket: Socket, head: Buffer) =>
   });
 });
 
+// 版本兜底：若面板偏好的「同版本实例镜像 tag」不可达则回退 :latest（见 docker.ts）。
+// 须在实例检测/升级/启动之前解析好，否则升级指示器会因指向不存在的 tag 而恒空。
+await resolveInstanceImage().catch(() => {});
 // 探测面板网络 + 重启后把已登记实例的容器拉起来
 await ensureNetwork().catch(() => {});
 for (const pub of listInstances()) {

@@ -20,7 +20,36 @@ function resolveWechatImage(): string {
   const repo = m ? m[1] : noDigest;
   return `${repo}:${ver}`;
 }
-const WECHAT_IMAGE = resolveWechatImage();
+// 注意：可被 resolveInstanceImage() 在启动时改写为 :latest 兜底（见下），故用 let。
+let WECHAT_IMAGE = resolveWechatImage();
+
+// 版本耦合的安全兜底（P0：issue #112 后续）。版本耦合让面板偏好「与自身同版本」的实例镜像 tag，
+// 但若该 tag 在本地和 registry 都不存在——典型如某次 CI 只发布了面板、实例镜像构建失败——
+// 面板就会指向一个不存在的 tag，导致：可升级检测恒空（指示器消失）、创建/升级实例拉取失败。
+// 故启动时校验一次：偏好的具体版本 tag 不可达 → 回退 :latest，保证功能永不因版本错配而瘫痪。
+let imageResolved = false;
+export async function resolveInstanceImage(): Promise<void> {
+  if (imageResolved) return;
+  imageResolved = true;
+  const preferred = WECHAT_IMAGE;
+  const tagM = preferred.split('@')[0].match(/:([^/:]+)$/);
+  if (!tagM || tagM[1] === 'latest') return; // 已是 latest 或无 tag → 无需兜底
+  try {
+    await docker.getImage(preferred).inspect();
+    return; // 本地已有该版本镜像 → 用它
+  } catch {
+    /* 本地没有，继续查 registry */
+  }
+  const ref = parseImageRef(preferred);
+  const remote = ref ? await fetchManifestDigest(ref) : null;
+  if (remote) return; // registry 上存在该版本 → 用它（ensureImage 会拉）
+  const fallback = preferred.replace(/:[^/:]+$/, ':latest');
+  appendPanelLog(
+    'WARN',
+    `实例镜像 ${preferred} 在本地与镜像仓库均不存在，回退使用 ${fallback}（很可能该版本的实例镜像未成功发布；升级/检测将基于 :latest）`,
+  );
+  WECHAT_IMAGE = fallback;
+}
 const PUID = process.env.PUID || '1000';
 const PGID = process.env.PGID || '1000';
 const TZ = process.env.TZ || 'Asia/Shanghai';
@@ -196,6 +225,7 @@ function envList(inst: Instance): string[] {
 
 // 确保微信镜像在本地存在；缺失则从 GHCR 拉取（首次新建实例时镜像通常还没拉过）。
 async function ensureImage(): Promise<void> {
+  await resolveInstanceImage(); // 版本兜底：若耦合的版本 tag 不可达则先回退 :latest
   try {
     await docker.getImage(WECHAT_IMAGE).inspect();
     return;
